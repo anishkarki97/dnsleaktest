@@ -17,9 +17,3 @@ A privacy-focused web application to test if your DNS requests are leaking outsi
 ```bash
 # Clone the repository
 git clone https://github.com/anishkarki97/dnsleaktest.git
-
-# Navigate to project directory
-cd dns-leak-tester
-
-# Open index.html in your browser
-open index.html
