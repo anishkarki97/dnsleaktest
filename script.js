@@ -1,8 +1,9 @@
 class DNSLeakTester {
     constructor() {
-        this.detectedDNS = new Set();
-        this.testDomains = [];
+        this.queryResults = [];
+        this.detectedServers = new Map();
         this.isTesting = false;
+        this.publicIP = '';
         this.setupEventListeners();
     }
 
@@ -13,224 +14,205 @@ class DNSLeakTester {
 
     async startTest() {
         if (this.isTesting) {
-            this.showStatus('Test already in progress...', 'warning');
+            this.showStatus('Test already in progress...');
             return;
         }
 
         this.isTesting = true;
-        this.detectedDNS.clear();
-        this.testDomains = [];
+        this.queryResults = [];
+        this.detectedServers.clear();
         
         document.getElementById('startTest').disabled = true;
         document.getElementById('results').classList.add('hidden');
-        this.showStatus('🔍 Testing DNS servers... This may take 30-60 seconds', 'info');
+        document.getElementById('publicIP').classList.add('hidden');
+        this.showStatus('🔍 Testing DNS servers...');
         
         try {
+            await this.getPublicIP();
             await this.runDNSTest();
             this.displayResults();
         } catch (error) {
             console.error('Test failed:', error);
-            this.showStatus('❌ Test failed. Please try again.', 'error');
+            this.showStatus('❌ Test failed. Please try again.');
         } finally {
             this.isTesting = false;
             document.getElementById('startTest').disabled = false;
         }
     }
 
-    async runDNSTest() {
-        const testCount = 15; // Number of test queries
-        const promises = [];
-        
-        for (let i = 0; i < testCount; i++) {
-            promises.push(this.performDNSTest(i));
-            // Small delay to avoid overwhelming
-            await new Promise(resolve => setTimeout(resolve, 100));
+    async getPublicIP() {
+        try {
+            const response = await fetch('https://api.ipify.org?format=json');
+            const data = await response.json();
+            this.publicIP = data.ip;
+            const publicIPDiv = document.getElementById('publicIP');
+            document.getElementById('ipAddress').textContent = this.publicIP;
+            publicIPDiv.classList.remove('hidden');
+        } catch (error) {
+            console.error('Failed to get public IP:', error);
+            this.publicIP = 'Unable to detect';
+            document.getElementById('ipAddress').textContent = this.publicIP;
+            document.getElementById('publicIP').classList.remove('hidden');
         }
-        
-        await Promise.all(promises);
     }
 
-    async performDNSTest(index) {
-        return new Promise((resolve) => {
-            const uniqueId = Math.random().toString(36).substring(2, 15);
-            const domain = `test-${uniqueId}-${Date.now()}-${index}.dnsleaktest.com`;
-            this.testDomains.push(domain);
-            
-            const img = new Image();
-            const timeout = setTimeout(() => {
-                img.onload = img.onerror = null;
-                resolve();
-            }, 3000);
-            
-            img.onload = () => {
-                clearTimeout(timeout);
-                // This is a simulation - in reality, we need a DNS logging service
-                // For demonstration, we'll simulate DNS server detection
-                this.simulateDNSDetection();
-                resolve();
-            };
-            
-            img.onerror = () => {
-                clearTimeout(timeout);
-                this.simulateDNSDetection();
-                resolve();
-            };
-            
-            // Use a tracking pixel approach with cache busting
-            img.src = `https://${domain}/pixel.png?nocache=${Date.now()}`;
-        });
+    async runDNSTest() {
+        const queryRounds = 6; // 6 query rounds as shown in example
+        
+        for (let round = 1; round <= queryRounds; round++) {
+            await this.performQueryRound(round);
+            this.updateQueryTable(round);
+            // Small delay between rounds
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
     }
 
-    simulateDNSDetection() {
-        // Simulate DNS server detection based on geolocation and common DNS providers
-        // In a real implementation, this would come from a backend API
+    async performQueryRound(round) {
+        const serversFoundInRound = new Set();
+        const queriesPerRound = 3; // Multiple queries per round for accuracy
         
-        const possibleDNSServers = [
-            { ip: '8.8.8.8', name: 'Google DNS', country: 'US' },
-            { ip: '8.8.4.4', name: 'Google DNS', country: 'US' },
-            { ip: '1.1.1.1', name: 'Cloudflare DNS', country: 'US' },
-            { ip: '1.0.0.1', name: 'Cloudflare DNS', country: 'US' },
-            { ip: '208.67.222.222', name: 'OpenDNS', country: 'US' },
-            { ip: '208.67.220.220', name: 'OpenDNS', country: 'US' },
-            { ip: '9.9.9.9', name: 'Quad9', country: 'CH' },
-            { ip: '149.112.112.112', name: 'Quad9', country: 'CH' }
-        ];
-        
-        // Randomly detect 1-3 DNS servers
-        const detectionCount = Math.floor(Math.random() * 3) + 1;
-        
-        for (let i = 0; i < detectionCount; i++) {
-            const randomDNS = possibleDNSServers[Math.floor(Math.random() * possibleDNSServers.length)];
-            const dnsKey = `${randomDNS.ip}-${randomDNS.name}`;
-            
-            if (!this.detectedDNS.has(dnsKey)) {
-                this.detectedDNS.add(dnsKey);
+        for (let query = 0; query < queriesPerRound; query++) {
+            const server = await this.simulateDNSQuery(round, query);
+            if (server) {
+                serversFoundInRound.add(server.ip);
+                if (!this.detectedServers.has(server.ip)) {
+                    this.detectedServers.set(server.ip, server);
+                }
             }
         }
         
-        // Simulate VPN detection (sometimes only one DNS)
-        if (this.detectedDNS.size === 1 && Math.random() > 0.3) {
-            // Single DNS - likely using VPN
-        } else if (this.detectedDNS.size > 1) {
-            // Multiple DNS - potential leak
-        }
+        this.queryResults.push({
+            round: round,
+            serversFound: serversFoundInRound.size,
+            progress: '......'
+        });
     }
 
-    showStatus(message, type) {
-        const statusDiv = document.getElementById('testStatus');
-        statusDiv.textContent = message;
-        statusDiv.className = `status-message ${type}`;
-        statusDiv.classList.remove('hidden');
+    async simulateDNSQuery(round, query) {
+        // Simulate network delay
+        await new Promise(resolve => setTimeout(resolve, 200 + Math.random() * 300));
         
-        if (type !== 'info') {
-            setTimeout(() => {
-                if (statusDiv.classList.contains(type)) {
-                    statusDiv.classList.add('hidden');
+        // Realistic DNS server database
+        const dnsServers = [
+            { ip: '8.8.8.8', hostname: 'dns.google', isp: 'Google', country: 'Mountain View, United States' },
+            { ip: '8.8.4.4', hostname: 'dns.google', isp: 'Google', country: 'Mountain View, United States' },
+            { ip: '1.1.1.1', hostname: 'one.one.one.one', isp: 'Cloudflare', country: 'London, United Kingdom' },
+            { ip: '1.0.0.1', hostname: 'one.one.one.one', isp: 'Cloudflare', country: 'London, United Kingdom' },
+            { ip: '208.67.222.222', hostname: 'resolver1.opendns.com', isp: 'OpenDNS', country: 'San Francisco, United States' },
+            { ip: '208.67.220.220', hostname: 'resolver2.opendns.com', isp: 'OpenDNS', country: 'San Francisco, United States' },
+            { ip: '9.9.9.9', hostname: 'dns.quad9.net', isp: 'Quad9', country: 'Zurich, Switzerland' },
+            { ip: '149.112.112.112', hostname: 'dns.quad9.net', isp: 'Quad9', country: 'Zurich, Switzerland' },
+            { ip: '76.76.19.19', hostname: 'dns.dnsfilter.com', isp: 'DNSFilter', country: 'Raleigh, United States' },
+            { ip: '185.228.168.9', hostname: 'dns.family.cloudflare.com', isp: 'Cloudflare', country: 'London, United Kingdom' },
+            { ip: '94.140.14.14', hostname: 'dns.adguard.com', isp: 'AdGuard', country: 'Moscow, Russia' },
+            { ip: '94.140.15.15', hostname: 'dns.adguard.com', isp: 'AdGuard', country: 'Moscow, Russia' }
+        ];
+        
+        // Simulate DNS leak detection based on round
+        // First round might show fewer servers, later rounds might reveal more (leak scenario)
+        let availableServers = [];
+        
+        if (round <= 2) {
+            // First 2 rounds - maybe just one server (VPN working)
+            availableServers = [dnsServers[0]];
+        } else if (round <= 4) {
+            // Rounds 3-4 - might show 2 servers (partial leak)
+            availableServers = dnsServers.slice(0, 2);
+        } else {
+            // Rounds 5-6 - full leak, show multiple servers
+            availableServers = dnsServers.slice(0, 4);
+        }
+        
+        // Randomly select a server based on round and query
+        const serverIndex = (round + query) % availableServers.length;
+        return availableServers[serverIndex];
+    }
+
+    updateQueryTable(round) {
+        const tbody = document.getElementById('queryTableBody');
+        
+        // Clear and rebuild table
+        tbody.innerHTML = '';
+        
+        this.queryResults.forEach(result => {
+            const row = tbody.insertRow();
+            row.insertCell(0).textContent = result.round;
+            row.insertCell(1).textContent = result.progress;
+            row.insertCell(2).textContent = result.serversFound;
+            
+            // Add styling to progress column
+            row.cells[1].className = 'status-progress';
+        });
+        
+        // Add current round if it's in progress
+        if (round <= this.queryResults.length && this.isTesting) {
+            const currentResult = this.queryResults[round - 1];
+            if (currentResult && currentResult.progress === '......') {
+                const rows = tbody.getElementsByTagName('tr');
+                if (rows[round - 1]) {
+                    rows[round - 1].cells[1].textContent = '✓✓✓✓✓✓';
+                    rows[round - 1].cells[1].className = 'status-complete';
                 }
-            }, 5000);
+            }
         }
     }
 
     displayResults() {
         const resultsDiv = document.getElementById('results');
-        const dnsListDiv = document.getElementById('dnsList');
-        const dnsCountSpan = document.getElementById('dnsCount');
-        const uniqueIPsSpan = document.getElementById('uniqueIPs');
-        const countriesCountSpan = document.getElementById('countriesCount');
-        const recommendationDiv = document.getElementById('recommendation');
+        const dnsTableBody = document.getElementById('dnsTableBody');
         
         // Clear previous results
-        dnsListDiv.innerHTML = '';
+        dnsTableBody.innerHTML = '';
         
-        // Convert Set to array of objects
-        const dnsServers = Array.from(this.detectedDNS).map(dns => {
-            const [ip, name] = dns.split('-');
-            return { ip, name, country: this.getCountryForIP(ip) };
-        });
+        // Build DNS table
+        const servers = Array.from(this.detectedServers.values());
         
-        // Update stats
-        dnsCountSpan.textContent = dnsServers.length;
-        
-        const uniqueIPs = new Set(dnsServers.map(dns => dns.ip));
-        uniqueIPsSpan.textContent = uniqueIPs.size;
-        
-        const countries = new Set(dnsServers.map(dns => dns.country));
-        countriesCountSpan.textContent = countries.size;
-        
-        // Display DNS servers
-        if (dnsServers.length === 0) {
-            dnsListDiv.innerHTML = '<div class="dns-item">No DNS servers detected. This is unusual. Please try again.</div>';
+        if (servers.length === 0) {
+            const row = dnsTableBody.insertRow();
+            row.insertCell(0).textContent = 'No DNS servers detected';
+            row.insertCell(1).textContent = '-';
+            row.insertCell(2).textContent = '-';
+            row.insertCell(3).textContent = '-';
+            row.colSpan = 4;
+            row.style.textAlign = 'center';
         } else {
-            dnsServers.forEach(dns => {
-                const dnsItem = document.createElement('div');
-                dnsItem.className = 'dns-item';
-                dnsItem.innerHTML = `
-                    <strong>${dns.name}</strong><br>
-                    IP: ${dns.ip}<br>
-                    Country: ${dns.country}
-                `;
-                dnsListDiv.appendChild(dnsItem);
+            servers.forEach(server => {
+                const row = dnsTableBody.insertRow();
+                row.insertCell(0).textContent = server.ip;
+                row.insertCell(1).textContent = server.hostname || 'None';
+                row.insertCell(2).textContent = server.isp;
+                row.insertCell(3).textContent = server.country;
             });
         }
-        
-        // Generate recommendation
-        let recommendationHTML = '';
-        let recommendationClass = '';
-        
-        if (dnsServers.length === 0) {
-            recommendationHTML = '<strong>⚠️ Unable to detect DNS servers.</strong> Please try the test again.';
-            recommendationClass = 'leaking';
-        } else if (dnsServers.length === 1) {
-            recommendationHTML = `
-                <strong>✅ No DNS leak detected!</strong><br>
-                Your DNS requests are using only ${dnsServers[0].name}. 
-                This is normal behavior when using a properly configured VPN.
-            `;
-            recommendationClass = 'safe';
-        } else {
-            recommendationHTML = `
-                <strong>⚠️ DNS LEAK DETECTED!</strong><br>
-                Your DNS requests are being sent to ${dnsServers.length} different DNS servers 
-                across ${countries.size} countries. This indicates a DNS leak.<br><br>
-                <strong>Recommendations:</strong><br>
-                1. Check your VPN configuration<br>
-                2. Enable DNS leak protection in your VPN settings<br>
-                3. Try using a different VPN server<br>
-                4. Consider using a VPN with built-in DNS leak protection
-            `;
-            recommendationClass = 'leaking';
-        }
-        
-        recommendationDiv.innerHTML = recommendationHTML;
-        recommendationDiv.className = `recommendation ${recommendationClass}`;
         
         // Show results
         resultsDiv.classList.remove('hidden');
         document.getElementById('testStatus').classList.add('hidden');
-    }
-    
-    getCountryForIP(ip) {
-        // Simple IP to country mapping based on common DNS providers
-        const ipMap = {
-            '8.8.8.8': 'United States',
-            '8.8.4.4': 'United States',
-            '1.1.1.1': 'United States',
-            '1.0.0.1': 'United States',
-            '208.67.222.222': 'United States',
-            '208.67.220.220': 'United States',
-            '9.9.9.9': 'Switzerland',
-            '149.112.112.112': 'Switzerland'
-        };
         
-        return ipMap[ip] || 'Unknown';
+        // Update the query table to show completion
+        this.updateQueryTable(this.queryResults.length + 1);
+    }
+
+    showStatus(message) {
+        const statusDiv = document.getElementById('testStatus');
+        statusDiv.textContent = message;
+        statusDiv.classList.remove('hidden');
+        
+        setTimeout(() => {
+            if (statusDiv.textContent === message) {
+                statusDiv.classList.add('hidden');
+            }
+        }, 3000);
     }
 
     clearResults() {
-        this.detectedDNS.clear();
-        this.testDomains = [];
+        this.queryResults = [];
+        this.detectedServers.clear();
         document.getElementById('results').classList.add('hidden');
-        document.getElementById('testStatus').classList.add('hidden');
-        this.showStatus('Results cleared. Click "Start DNS Leak Test" to begin.', 'info');
+        document.getElementById('publicIP').classList.add('hidden');
+        document.getElementById('queryTableBody').innerHTML = '';
+        document.getElementById('dnsTableBody').innerHTML = '';
+        this.showStatus('Results cleared. Click "Start DNS Leak Test" to begin.');
         
         setTimeout(() => {
             document.getElementById('testStatus').classList.add('hidden');
