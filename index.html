@@ -14,49 +14,49 @@
         </header>
 
         <div class="main-content">
-            <div class="info-card">
-                <h2>What is a DNS Leak?</h2>
-                <p>A DNS leak occurs when your device uses DNS servers other than the ones provided by your VPN, potentially exposing your browsing activity to your ISP.</p>
-            </div>
-
             <div class="test-controls">
                 <button id="startTest" class="btn-primary">🚀 Start DNS Leak Test</button>
                 <button id="clearResults" class="btn-secondary">🗑️ Clear Results</button>
             </div>
 
-            <div id="testStatus" class="status-message hidden"></div>
+            <div id="publicIP" class="public-ip-box hidden">
+                <strong>Your public IP:</strong> <span id="ipAddress">-</span>
+            </div>
 
             <div id="results" class="results hidden">
-                <h2>📊 Test Results</h2>
+                <h2>Test complete</h2>
                 
-                <div class="stats">
-                    <div class="stat-card">
-                        <h3>DNS Servers Detected</h3>
-                        <div id="dnsCount" class="stat-value">0</div>
-                    </div>
-                    <div class="stat-card">
-                        <h3>Unique IPs</h3>
-                        <div id="uniqueIPs" class="stat-value">0</div>
-                    </div>
-                    <div class="stat-card">
-                        <h3>Countries</h3>
-                        <div id="countriesCount" class="stat-value">0</div>
-                    </div>
+                <div class="query-table-container">
+                    <table class="query-table" id="queryTable">
+                        <thead>
+                            <tr>
+                                <th>Query round</th>
+                                <th>Progress...</th>
+                                <th>Servers found</th>
+                            </tr>
+                        </thead>
+                        <tbody id="queryTableBody">
+                        </tbody>
+                    </table>
                 </div>
 
-                <div class="dns-list">
-                    <h3>DNS Servers Used:</h3>
-                    <div id="dnsList" class="list-container"></div>
+                <div class="dns-table-container">
+                    <table class="dns-table" id="dnsTable">
+                        <thead>
+                            <tr>
+                                <th>IP</th>
+                                <th>Hostname</th>
+                                <th>ISP</th>
+                                <th>Country</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dnsTableBody">
+                        </tbody>
+                    </table>
                 </div>
-
-                <div class="recommendation" id="recommendation"></div>
             </div>
 
-            <div class="info-card">
-                <h2>ℹ️ How This Test Works</h2>
-                <p>This tool creates multiple unique subdomains and checks which DNS servers resolve them. Each detected DNS server represents a potential leak point in your connection.</p>
-                <p class="note">Note: This is a client-side test. For complete privacy, consider using a trusted VPN service.</p>
-            </div>
+            <div id="testStatus" class="status-message hidden"></div>
         </div>
 
         <footer>
