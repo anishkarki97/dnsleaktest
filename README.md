@@ -11,19 +11,6 @@ A privacy-focused web application to test if your DNS requests are leaking outsi
 - 📱 Responsive design for all devices
 - 🚀 No server-side tracking - everything runs client-side
 
-## How to Deploy on GitHub Pages
-
-1. **Create a new repository** on GitHub
-2. **Clone the repository** to your local machine
-3. **Add all files** (`index.html`, `style.css`, `script.js`, `README.md`)
-4. **Push to GitHub**
-5. **Enable GitHub Pages**:
-   - Go to repository Settings
-   - Navigate to Pages section
-   - Select "main" branch as source
-   - Click Save
-
-6. **Access your DNS leak tester** at: `https://github.com/anishkarki97/dnsleaktest`
 
 ## Local Development
 
