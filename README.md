@@ -23,13 +23,13 @@ A privacy-focused web application to test if your DNS requests are leaking outsi
    - Select "main" branch as source
    - Click Save
 
-6. **Access your DNS leak tester** at: `https://[your-username].github.io/[repository-name]`
+6. **Access your DNS leak tester** at: `https://github.com/anishkarki97/dnsleaktest`
 
 ## Local Development
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/dns-leak-tester.git
+git clone https://github.com/anishkarki97/dnsleaktest.git
 
 # Navigate to project directory
 cd dns-leak-tester
